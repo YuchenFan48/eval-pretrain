@@ -65,7 +65,7 @@ def extract_answer_mmlu_pro(response: str) -> str:
     # 如果没有匹配到，尝试找到最后一个出现的选项字母
     matches = re.findall(r'\b([A-P])\b', response.upper())
     if matches:
-        return matches[-1]
+        return matches[0]
     
     return ""
 
@@ -94,7 +94,7 @@ def extract_answer_mmlu(response: str) -> str:
     # 找最后一个出现的 A-D（CoT 可能在中间提到其他选项）
     matches = re.findall(r'\b([A-D])\b', response.upper())
     if matches:
-        return matches[-1]
+        return matches[0]
     
     return ""
 
@@ -149,7 +149,7 @@ def extract_answer_gsm8k(response: str) -> str:
     # 提取最后一个数字
     numbers = re.findall(r'(-?\d+(?:,?\d+)*(?:\.\d+)?)', response)
     if numbers:
-        return numbers[-1].replace(',', '')
+        return numbers[0].replace(',', '')
     
     return ""
 
@@ -200,7 +200,7 @@ def extract_answer_math(response: str) -> str:
     # 优先级3: 提取最后一个在 $ $ 之间的内容
     dollar_matches = re.findall(r'\$([^\$]+)\$', response)
     if dollar_matches:
-        return dollar_matches[-1].strip()
+        return dollar_matches[0].strip()
     
     # 优先级4: 提取最后一个数字或表达式
     # 尝试匹配分数、小数、整数等
@@ -213,10 +213,9 @@ def extract_answer_math(response: str) -> str:
     for pattern in number_patterns:
         matches = re.findall(pattern, response)
         if matches:
-            return matches[-1]
+            return matches[0]
     
     return ""
-
 
 def extract_answer_multiple_choice(response: str, options: str = 'ABCD') -> str:
     """
@@ -224,10 +223,6 @@ def extract_answer_multiple_choice(response: str, options: str = 'ABCD') -> str:
     """
     if not response:
         return ""
-
-    # 1. 预处理：只取最后一部分，防止被 Question 重复或长篇推理干扰
-    # 通常答案在最后 200 个字符内
-    footer = response[-200:] if len(response) > 200 else response
     
     # 2. 优先级模式匹配 (从最强特征到弱特征)
     patterns = [
@@ -246,10 +241,10 @@ def extract_answer_multiple_choice(response: str, options: str = 'ABCD') -> str:
         # 在整个文本中找最后一个匹配项（通常是最终结论）
         matches = list(re.finditer(pattern, response))
         if matches:
-            return matches[-1].group(1).upper()
+            return matches[0].group(1).upper()
 
     # 3. 兜底策略 1: 查找最后一行出现的孤立字母
-    last_line = response.strip().split('\n')[-1]
+    last_line = response.strip().split('\n')[0]
     match = re.search(rf'\b([{options}])\b', last_line)
     if match:
         return match.group(1).upper()
@@ -258,9 +253,47 @@ def extract_answer_multiple_choice(response: str, options: str = 'ABCD') -> str:
     # 注意：这里要加上 \b 边界触发，防止匹配到单词内部的字母
     matches = re.findall(rf'\b([{options}])\b', response)
     if matches:
-        return matches[-1].upper()
+        return matches[0].upper()
 
     return ""
+
+
+def extract_answer_nq(response: str) -> str:
+    """
+    从NQ回答中提取答案文本
+    """
+    if not response:
+        return ""
+    response = response.strip()
+    patterns = [
+        r'[Tt]he answer is[:\s]+([^\n\.]+)',
+        r'[Aa]nswer[:\s]+([^\n\.]+)',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, response)
+        if match:
+            return match.group(1).strip()
+    last_line = response.split('\n')[-1].strip()
+    return last_line if last_line else response
+
+
+def extract_answer_drop(response: str) -> str:
+    """
+    从DROP回答中提取答案文本
+    """
+    if not response:
+        return ""
+    response = response.strip()
+    patterns = [
+        r'[Tt]he answer is[:\s]+([^\n\.]+)',
+        r'[Aa]nswer[:\s]+([^\n\.]+)',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, response)
+        if match:
+            return match.group(1).strip()
+    last_line = response.split('\n')[-1].strip()
+    return last_line if last_line else response
 
 def extract_answer_mmlu_redux(response: str) -> str:
     """
@@ -268,6 +301,36 @@ def extract_answer_mmlu_redux(response: str) -> str:
     """
     # MMLU-Redux 通常是 ABCD，但为了兼容性保留
     return extract_answer_multiple_choice(response, 'ABCD')
+
+
+def normalize_choice_ref(ref: Any, options: str = 'ABCD', prefer_one_based: bool = False) -> str:
+    """
+    标准化多选题参考答案（支持字母与数字索引）
+    """
+    if isinstance(ref, int):
+        if prefer_one_based and 1 <= ref <= len(options):
+            return options[ref - 1]
+        if 0 <= ref < len(options):
+            return options[ref]
+        if 1 <= ref <= len(options):
+            return options[ref - 1]
+        return str(ref).upper()
+
+    ref_str = str(ref).strip()
+    if ref_str.isdigit():
+        idx = int(ref_str)
+        if prefer_one_based and 1 <= idx <= len(options):
+            return options[idx - 1]
+        if 0 <= idx < len(options):
+            return options[idx]
+        if 1 <= idx <= len(options):
+            return options[idx - 1]
+        return ref_str.upper()
+
+    if len(ref_str) == 1:
+        return ref_str.upper()
+
+    return ref_str.upper()
 
 
 def normalize_math_answer(answer: str) -> str:
@@ -299,6 +362,130 @@ def normalize_math_answer(answer: str) -> str:
         answer_lower = answer_lower.replace(unit, '')
     
     return answer_lower.strip()
+
+
+def normalize_nq_answer(text: str) -> str:
+    """
+    NQ标准化：小写、去标点、去冠词、去多余空格
+    """
+    if text is None:
+        return ""
+    text = str(text).lower()
+    text = re.sub(r'[^\w\s]', ' ', text)
+    text = re.sub(r'\b(a|an|the)\b', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+def extract_answer_text(response: str) -> str:
+    """
+    通用文本答案提取器
+    """
+    if not response:
+        return ""
+    response = response.strip()
+    patterns = [
+        r'[Tt]he answer is[:\s]+([^\n\.]+)',
+        r'[Aa]nswer[:\s]+([^\n\.]+)',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, response)
+        if match:
+            return match.group(1).strip()
+    last_line = response.split('\n')[-1].strip()
+    return last_line if last_line else response
+
+
+def _get_arc_answer_text(ref: Any, item: Dict[str, Any]) -> str:
+    """
+    将ARC参考答案映射为选项文本
+    """
+    question = item.get('question', '')
+    if isinstance(question, dict):
+        choices = question.get('choices', item.get('choices', []))
+    else:
+        choices = item.get('choices', item.get('options', []))
+    
+    if choices and isinstance(choices[0], dict):
+        label_to_text = {str(c.get('label', '')).strip().upper(): c.get('text', '') for c in choices}
+        ref_label = normalize_choice_ref(ref, 'ABCDE', prefer_one_based=True)
+        return label_to_text.get(ref_label, '')
+    
+    if isinstance(choices, list):
+        ref_label = normalize_choice_ref(ref, 'ABCDE', prefer_one_based=True)
+        if len(ref_label) == 1 and ref_label in 'ABCDE':
+            idx = ord(ref_label) - ord('A')
+            if 0 <= idx < len(choices):
+                return str(choices[idx])
+    
+    return str(ref)
+
+
+def _get_gpqa_answer_text(ref: Any, item: Dict[str, Any]) -> str:
+    """
+    将GPQA参考答案映射为选项文本
+    """
+    label = normalize_choice_ref(ref, 'ABCD', prefer_one_based=False)
+    if label == 'A':
+        return item.get('A', '')
+    if label == 'B':
+        return item.get('B', '')
+    if label == 'C':
+        return item.get('C', '')
+    if label == 'D':
+        return item.get('D', '')
+    return str(ref)
+
+
+def _get_choices_answer_text(ref: Any, choices: List[Any]) -> str:
+    if not choices:
+        return str(ref)
+    options = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[:len(choices)]
+    ref_label = normalize_choice_ref(ref, options, prefer_one_based=True)
+    if len(ref_label) == 1 and ref_label in options:
+        idx = ord(ref_label) - ord('A')
+        if 0 <= idx < len(choices):
+            return str(choices[idx])
+    return str(ref)
+
+
+def normalize_drop_answer(text: str) -> str:
+    """
+    DROP标准化：小写、去标点、去冠词、去多余空格
+    """
+    if text is None:
+        return ""
+    text = str(text).lower()
+    text = re.sub(r'[^\w\s]', ' ', text)
+    text = re.sub(r'\b(a|an|the)\b', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+def compute_drop_f1(prediction: str, gold: str) -> float:
+    pred_tokens = normalize_drop_answer(prediction).split()
+    gold_tokens = normalize_drop_answer(gold).split()
+    if not pred_tokens and not gold_tokens:
+        return 1.0
+    if not pred_tokens or not gold_tokens:
+        return 0.0
+    common = {}
+    for token in pred_tokens:
+        common[token] = common.get(token, 0) + 1
+    num_same = 0
+    for token in gold_tokens:
+        if common.get(token, 0) > 0:
+            num_same += 1
+            common[token] -= 1
+    if num_same == 0:
+        return 0.0
+    precision = num_same / len(pred_tokens)
+    recall = num_same / len(gold_tokens)
+    return (2 * precision * recall) / (precision + recall)
+
+
+def compute_drop_em(prediction: str, gold: str) -> float:
+    return 1.0 if normalize_drop_answer(prediction) == normalize_drop_answer(gold) else 0.0
 
 
 def is_math_equal(pred: str, ref: str) -> bool:
@@ -358,55 +545,44 @@ def evaluate_benchmark(
     details = []
     
     for i, (pred, ref) in enumerate(zip(predictions, references)):
+        pred_norm = None
+        ref_norm = None
+        ref_norm_list = None
         # 根据benchmark类型提取答案
         if benchmark_name == 'bbh':
             extracted_pred = extract_answer_bbh(pred)
             is_correct = (extracted_pred.lower() == str(ref).lower())
             
         elif benchmark_name == 'mmlu-pro':
-            extracted_pred = extract_answer_mmlu_pro(pred)
-            # MMLU-Pro的答案可能是字母或索引
-            if isinstance(ref, str):
-                is_correct = (extracted_pred == ref.upper())
-            elif isinstance(ref, int):
-                # 如果ref是索引，转换为字母
-                ref_letter = 'ABCDEFGHIJKLMNOP'[ref]
-                is_correct = (extracted_pred == ref_letter)
-            else:
-                is_correct = (extracted_pred == str(ref).upper())
+            extracted_pred = extract_answer_text(pred)
+            options = data_items[i].get('options', [])
+            ref_answer = _get_choices_answer_text(ref, options)
+            pred_norm = normalize_nq_answer(extracted_pred)
+            ref_norm = normalize_nq_answer(ref_answer)
+            is_correct = (pred_norm == ref_norm)
                 
         elif benchmark_name == 'mmlu':
-            extracted_pred = extract_answer_mmlu(pred)
-            # 处理不同格式的参考答案
-            if isinstance(ref, str):
-                ref_answer = ref.upper() if len(ref) == 1 else ref
-            elif isinstance(ref, int):
-                ref_answer = 'ABCD'[ref]
-            else:
-                ref_answer = str(ref).upper()
-            is_correct = (extracted_pred == ref_answer)
+            extracted_pred = extract_answer_text(pred)
+            choices = data_items[i].get('choices', [])
+            ref_answer = _get_choices_answer_text(ref, choices)
+            pred_norm = normalize_nq_answer(extracted_pred)
+            ref_norm = normalize_nq_answer(ref_answer)
+            is_correct = (pred_norm == ref_norm)
         
         elif benchmark_name == 'mmlu-redux':
-            # 1. 尝试更严格的提取
-            extracted_pred = extract_answer_multiple_choice(pred, 'ABCD')
-            
-            # 2. 针对 Redux 可能存在的特殊情况（如参考答案是 index）进行处理
-            if isinstance(ref, int):
-                ref_answer = 'ABCD'[ref]
-            else:
-                ref_answer = str(ref).upper().strip()
-            
-            is_correct = (extracted_pred == ref_answer)
+            extracted_pred = extract_answer_text(pred)
+            choices = data_items[i].get('choices', [])
+            ref_answer = _get_choices_answer_text(ref, choices)
+            pred_norm = normalize_nq_answer(extracted_pred)
+            ref_norm = normalize_nq_answer(ref_answer)
+            is_correct = (pred_norm == ref_norm)
             
         elif benchmark_name == 'gpqa':
-            extracted_pred = extract_answer_gpqa(pred)
-            if isinstance(ref, str):
-                ref_answer = ref.upper() if len(ref) == 1 else ref
-            elif isinstance(ref, int):
-                ref_answer = 'ABCD'[ref]
-            else:
-                ref_answer = str(ref).upper()
-            is_correct = (extracted_pred == ref_answer)
+            extracted_pred = extract_answer_text(pred)
+            ref_answer = _get_gpqa_answer_text(ref, data_items[i])
+            pred_norm = normalize_nq_answer(extracted_pred)
+            ref_norm = normalize_nq_answer(ref_answer)
+            is_correct = (pred_norm == ref_norm)
             
         elif benchmark_name == 'supergpqa':
             extracted_pred = extract_answer_multiple_choice(pred, 'ABCDEFGHIJ')
@@ -430,6 +606,65 @@ def evaluate_benchmark(
             if extracted_pred.endswith('.'):
                 extracted_pred = extracted_pred[:-1]
             is_correct = is_math_equal(extracted_pred, str(ref))
+
+        elif benchmark_name == 'hellaswag':
+            extracted_pred = extract_answer_text(pred)
+            endings = data_items[i].get('endings', [])
+            ref_answer = _get_choices_answer_text(ref, endings)
+            pred_norm = normalize_nq_answer(extracted_pred)
+            ref_norm = normalize_nq_answer(ref_answer)
+            is_correct = (pred_norm == ref_norm)
+
+        elif benchmark_name == 'arc-c':
+            extracted_pred = extract_answer_text(pred)
+            ref_answer = _get_arc_answer_text(ref, data_items[i])
+            pred_norm = normalize_nq_answer(extracted_pred)
+            ref_norm = normalize_nq_answer(ref_answer)
+            is_correct = (pred_norm == ref_norm)
+
+        elif benchmark_name == 'arc-e':
+            extracted_pred = extract_answer_text(pred)
+            ref_answer = _get_arc_answer_text(ref, data_items[i])
+            pred_norm = normalize_nq_answer(extracted_pred)
+            ref_norm = normalize_nq_answer(ref_answer)
+            is_correct = (pred_norm == ref_norm)
+
+        elif benchmark_name == 'winogrande':
+            extracted_pred = extract_answer_text(pred)
+            choices = [data_items[i].get('option1', ''), data_items[i].get('option2', '')]
+            ref_answer = _get_choices_answer_text(ref, choices)
+            pred_norm = normalize_nq_answer(extracted_pred)
+            ref_norm = normalize_nq_answer(ref_answer)
+            is_correct = (pred_norm == ref_norm)
+
+        elif benchmark_name == 'piqa':
+            extracted_pred = extract_answer_multiple_choice(pred, 'AB')
+            ref_answer = normalize_choice_ref(ref, 'AB', prefer_one_based=False)
+            is_correct = (extracted_pred == ref_answer)
+
+        elif benchmark_name == 'nq':
+            extracted_pred = extract_answer_nq(pred)
+            if isinstance(ref, list):
+                gold_answers = [str(r) for r in ref if r is not None]
+            else:
+                gold_answers = [str(ref)]
+            pred_norm = normalize_nq_answer(extracted_pred)
+            ref_norm_list = [normalize_nq_answer(ans) for ans in gold_answers]
+            is_correct = pred_norm in ref_norm_list
+
+        elif benchmark_name == 'drop':
+            extracted_pred = extract_answer_drop(pred)
+            if isinstance(ref, list):
+                gold_answers = [str(r) for r in ref if r is not None]
+            else:
+                gold_answers = [str(ref)]
+            if not gold_answers:
+                gold_answers = [""]
+            em_scores = [compute_drop_em(extracted_pred, ga) for ga in gold_answers]
+            f1_scores = [compute_drop_f1(extracted_pred, ga) for ga in gold_answers]
+            best_em = max(em_scores) if em_scores else 0.0
+            best_f1 = max(f1_scores) if f1_scores else 0.0
+            is_correct = (best_em == 1.0)
             
         else:
             # 默认：直接字符串匹配
@@ -439,13 +674,23 @@ def evaluate_benchmark(
         if is_correct:
             correct += 1
         
-        details.append({
+        detail = {
             'index': i,
             'prediction': pred,
             'extracted_answer': extracted_pred,
             'reference': ref,
             'correct': is_correct
-        })
+        }
+        if pred_norm is not None:
+            detail['normalized_prediction'] = pred_norm
+        if ref_norm is not None:
+            detail['normalized_reference'] = ref_norm
+        if ref_norm_list is not None:
+            detail['normalized_references'] = ref_norm_list
+        if benchmark_name == 'drop':
+            detail['em'] = best_em
+            detail['f1'] = best_f1
+        details.append(detail)
     
     accuracy = correct / len(predictions) * 100 if predictions else 0.0
     

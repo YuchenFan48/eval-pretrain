@@ -17,6 +17,42 @@ def load_jsonl(path: str) -> List[Dict[str, Any]]:
     return data
 
 
+def load_json(path: str) -> List[Dict[str, Any]]:
+    """加载JSON格式的数据（列表）"""
+    with open(path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    if not isinstance(data, list):
+        raise ValueError("JSON root is not a list.")
+    return data
+
+
+def load_parquet(path: str) -> List[Dict[str, Any]]:
+    """加载Parquet格式的数据"""
+    try:
+        import pyarrow.parquet as pq  # type: ignore
+        table = pq.read_table(path)
+        return table_to_rows(table)
+    except ImportError:
+        try:
+            import pandas as pd  # type: ignore
+            return pd.read_parquet(path).to_dict(orient='records')
+        except ImportError as exc:
+            raise ImportError(
+                "缺少读取parquet的依赖，请安装 pyarrow 或 pandas。"
+            ) from exc
+
+
+def table_to_rows(table) -> List[Dict[str, Any]]:
+    """将pyarrow Table转换为行列表（兼容旧版本pyarrow）"""
+    columns = table.column_names
+    data = table.to_pydict()
+    rows = []
+    for i in range(table.num_rows):
+        row = {col: data[col][i] for col in columns}
+        rows.append(row)
+    return rows
+
+
 def load_csv(path: str) -> List[List[str]]:
     """加载CSV格式的数据"""
     data = []
@@ -43,6 +79,12 @@ def load_benchmark_data(benchmark_name: str, benchmark_config: dict) -> List[Dic
     
     if format_type == 'jsonl':
         return load_jsonl(path)
+    elif format_type == 'json':
+        raw_data = load_json(path)
+        return parse_json_data(benchmark_name, raw_data)
+    elif format_type == 'parquet':
+        raw_data = load_parquet(path)
+        return parse_parquet_data(benchmark_name, raw_data)
     elif format_type == 'csv':
         raw_data = load_csv(path)
         return parse_csv_data(benchmark_name, raw_data)
@@ -65,6 +107,36 @@ def parse_csv_data(benchmark_name: str, raw_data: List[List[str]]) -> List[Dict[
         return parse_gpqa_csv(raw_data)
     elif benchmark_name == 'mmlu-redux':
         return parse_mmlu_redux_csv(raw_data)
+    else:
+        raise ValueError(f"Unknown benchmark: {benchmark_name}")
+
+
+def parse_json_data(benchmark_name: str, raw_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    将JSON原始数据转换为统一的字典格式
+    """
+    if benchmark_name == 'nq':
+        return parse_nq_json(raw_data)
+    else:
+        raise ValueError(f"Unknown benchmark: {benchmark_name}")
+
+
+def parse_parquet_data(benchmark_name: str, raw_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    将Parquet原始数据转换为统一的字典格式
+    """
+    if benchmark_name == 'arc-c':
+        return parse_arc_c_parquet(raw_data)
+    elif benchmark_name == 'arc-e':
+        return parse_arc_c_parquet(raw_data)
+    elif benchmark_name == 'hellaswag':
+        return parse_hellaswag_parquet(raw_data)
+    elif benchmark_name == 'winogrande':
+        return parse_winogrande_parquet(raw_data)
+    elif benchmark_name == 'piqa':
+        return parse_piqa_parquet(raw_data)
+    elif benchmark_name == 'drop':
+        return parse_drop_parquet(raw_data)
     else:
         raise ValueError(f"Unknown benchmark: {benchmark_name}")
 
@@ -147,6 +219,247 @@ def parse_mmlu_redux_csv(raw_data: List[List[str]]) -> List[Dict[str, Any]]:
     return data
 
 
+def parse_arc_c_parquet(raw_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    解析ARC-C的Parquet数据
+    字段: id, question, choices{text,label}, answerKey
+    """
+    data = []
+    
+    for row in raw_data:
+        choice_map = {}
+        choices = row.get('choices', {})
+        labels = choices.get('label', []) if isinstance(choices, dict) else []
+        texts = choices.get('text', []) if isinstance(choices, dict) else []
+        
+        for label, text in zip(labels, texts):
+            mapped_label = _normalize_choice_label(label)
+            choice_map[mapped_label] = text
+        
+        ordered_choices = [choice_map.get(label, '') for label in ['A', 'B', 'C', 'D']]
+        answer = _normalize_choice_label(row.get('answerKey', ''))
+        
+        data.append({
+            'id': row.get('id', ''),
+            'question': row.get('question', ''),
+            'choices': ordered_choices,
+            'answer': answer,
+        })
+    
+    return data
+
+
+def parse_hellaswag_parquet(raw_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    解析HellaSwag的Parquet数据
+    字段: ctx_a, ctx_b, ctx, endings, label
+    """
+    data = []
+    
+    for row in raw_data:
+        context = str(row.get('ctx', '') or '').strip()
+        if not context:
+            ctx_a = str(row.get('ctx_a', '') or '').strip()
+            ctx_b = str(row.get('ctx_b', '') or '').strip()
+            context = f"{ctx_a} {ctx_b}".strip()
+        
+        label = row.get('label', '')
+        answer = _label_to_abcd(label)
+        
+        data.append({
+            'ind': row.get('ind', ''),
+            'context': context,
+            'endings': row.get('endings', []),
+            'answer': answer,
+        })
+    
+    return data
+
+
+def parse_winogrande_parquet(raw_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    解析WinoGrande的Parquet数据
+    字段: sentence, option1, option2, answer (1/2)
+    """
+    data = []
+    
+    for row in raw_data:
+        answer = row.get('answer', '')
+        answer_str = str(answer).strip()
+        answer_letter = 'A' if answer_str == '1' else 'B' if answer_str == '2' else ''
+        
+        data.append({
+            'sentence': row.get('sentence', ''),
+            'option1': row.get('option1', ''),
+            'option2': row.get('option2', ''),
+            'answer': answer_letter,
+        })
+    
+    return data
+
+
+def _normalize_choice_label(label: Any) -> str:
+    label_str = str(label).strip()
+    if label_str.isdigit():
+        idx = int(label_str) - 1
+        if 0 <= idx < 4:
+            return 'ABCD'[idx]
+    return label_str.upper()
+
+
+def _label_to_abcd(label: Any) -> str:
+    label_str = str(label).strip()
+    if label_str.isdigit():
+        idx = int(label_str)
+        if 0 <= idx < 4:
+            return 'ABCD'[idx]
+    if label_str in ['A', 'B', 'C', 'D']:
+        return label_str
+    return label_str.upper()
+
+
+def parse_piqa_parquet(raw_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    解析PIQA的Parquet数据
+    字段: goal, sol1, sol2, label (0/1)
+    """
+    data = []
+    
+    for row in raw_data:
+        label = row.get('label', '')
+        label_str = str(label).strip()
+        answer = 'A' if label_str == '0' else 'B' if label_str == '1' else ''
+        
+        data.append({
+            'goal': row.get('goal', ''),
+            'sol1': row.get('sol1', ''),
+            'sol2': row.get('sol2', ''),
+            'answer': answer,
+        })
+    
+    return data
+
+
+def parse_drop_parquet(raw_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    解析DROP的Parquet数据
+    字段: passage, question, answers/answers_spans
+    """
+    data = []
+    
+    for row in raw_data:
+        answers = collect_drop_answers(row)
+        data.append({
+            'passage': row.get('passage', ''),
+            'question': row.get('question', ''),
+            'answers': answers,
+        })
+    
+    return data
+
+
+def collect_drop_answers(example: Dict[str, Any]) -> List[str]:
+    answers: List[str] = []
+    spans = example.get('answers_spans', None)
+    if isinstance(spans, dict):
+        spans = spans.get('spans', [])
+    if isinstance(spans, list):
+        answers.extend([str(s) for s in spans if s])
+    
+    ans = example.get('answers', None)
+    if isinstance(ans, dict):
+        spans_list = ans.get('spans', [])
+        if isinstance(spans_list, list):
+            answers.extend([str(s) for s in spans_list if s])
+        text_list = ans.get('text', [])
+        if isinstance(text_list, list):
+            answers.extend([str(s) for s in text_list if s])
+        number = ans.get('number', '')
+        if number:
+            answers.append(str(number))
+        date = ans.get('date', {})
+        date_text = _format_drop_date(date)
+        if date_text:
+            answers.append(date_text)
+    elif isinstance(ans, list):
+        answers.extend([str(a) for a in ans if a])
+    elif isinstance(ans, str):
+        answers.append(ans)
+    
+    answer = example.get('answer', None)
+    if isinstance(answer, dict):
+        spans_list = answer.get('spans', [])
+        if isinstance(spans_list, list):
+            answers.extend([str(s) for s in spans_list if s])
+        number = answer.get('number', '')
+        if number:
+            answers.append(str(number))
+        date_text = _format_drop_date(answer.get('date', {}))
+        if date_text:
+            answers.append(date_text)
+    
+    validated = example.get('validated_answers', None)
+    if isinstance(validated, dict):
+        numbers = validated.get('number', [])
+        if isinstance(numbers, list):
+            answers.extend([str(n) for n in numbers if n])
+        dates = validated.get('date', [])
+        if isinstance(dates, list):
+            for d in dates:
+                date_text = _format_drop_date(d)
+                if date_text:
+                    answers.append(date_text)
+        spans = validated.get('spans', [])
+        if isinstance(spans, list):
+            for span_group in spans:
+                if isinstance(span_group, list):
+                    answers.extend([str(s) for s in span_group if s])
+
+    deduped = []
+    seen = set()
+    for a in answers:
+        if a not in seen:
+            deduped.append(a)
+            seen.add(a)
+    return deduped
+
+
+def _format_drop_date(date_obj: Any) -> str:
+    if not isinstance(date_obj, dict):
+        return ""
+    date_parts = [date_obj.get('day', ''), date_obj.get('month', ''), date_obj.get('year', '')]
+    date_text = " ".join([str(p).strip() for p in date_parts if str(p).strip()])
+    return date_text
+
+
+def parse_nq_json(raw_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    解析Natural Questions的JSON数据
+    字段: questions, answers, contexts
+    """
+    data = []
+    
+    for row in raw_data:
+        questions = row.get('questions', [])
+        question = ''
+        if questions and isinstance(questions, list):
+            question = questions[0].get('input_text', '')
+        answers = row.get('answers', [])
+        answer_texts = []
+        for ans in answers:
+            text = ans.get('span_text', '')
+            if text:
+                answer_texts.append(text)
+        data.append({
+            'id': row.get('id', ''),
+            'question': question,
+            'context': row.get('contexts', ''),
+            'answers': answer_texts,
+        })
+    
+    return data
+
+
 # 示例使用
 if __name__ == '__main__':
     import sys
@@ -162,4 +475,3 @@ if __name__ == '__main__':
     data = load_benchmark_data('gpqa', BENCHMARK_CONFIG['gpqa'])
     print(f"GPQA数据量: {len(data)}")
     print(f"示例: {data[0]}")
-

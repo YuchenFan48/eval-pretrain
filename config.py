@@ -51,6 +51,48 @@ BENCHMARK_CONFIG = {
         'fields': {'question': 'question', 'options': 'options', 'answer': 'answer_letter'},
         'type': 'multiple_choice',
     },
+    'hellaswag': {
+        'path': '/mnt/cephfs/users/yuchenfan/benchmark-eval/dataset/hellaswag.parquet',
+        'format': 'parquet',
+        'fields': {'ctx': 'ctx', 'endings': 'endings', 'label': 'label'},
+        'type': 'multiple_choice',
+    },
+    'arc-c': {
+        'path': '/mnt/cephfs/users/yuchenfan/benchmark-eval/dataset/arc-c.parquet',
+        'format': 'parquet',
+        'fields': {'question': 'question', 'choices': 'choices', 'answer': 'answerKey'},
+        'type': 'multiple_choice',
+    },
+    'arc-e': {
+        'path': '/mnt/cephfs/users/yuchenfan/benchmark-eval/dataset/arc-e.parquet',
+        'format': 'parquet',
+        'fields': {'question': 'question', 'choices': 'choices', 'answer': 'answerKey'},
+        'type': 'multiple_choice',
+    },
+    'winogrande': {
+        'path': '/mnt/cephfs/users/yuchenfan/benchmark-eval/dataset/winogrand.parquet',
+        'format': 'parquet',
+        'fields': {'sentence': 'sentence', 'option1': 'option1', 'option2': 'option2', 'answer': 'answer'},
+        'type': 'multiple_choice',
+    },
+    'piqa': {
+        'path': '/mnt/cephfs/users/yuchenfan/benchmark-eval/dataset/piqa.parquet',
+        'format': 'parquet',
+        'fields': {'goal': 'goal', 'sol1': 'sol1', 'sol2': 'sol2', 'label': 'label'},
+        'type': 'multiple_choice',
+    },
+    'nq': {
+        'path': '/mnt/cephfs/users/yuchenfan/benchmark-eval/dataset/nq.json',
+        'format': 'json',
+        'fields': {'question': 'question', 'context': 'context', 'answers': 'answers'},
+        'type': 'reading',
+    },
+    'drop': {
+        'path': '/mnt/cephfs/users/yuchenfan/benchmark-eval/dataset/drop.parquet',
+        'format': 'parquet',
+        'fields': {'passage': 'passage', 'question': 'question', 'answers': 'answers'},
+        'type': 'reading',
+    },
     # 代码生成 benchmarks
     'mbpp': {
         'path': '/mnt/cephfs/users/yuchenfan/benchmark-eval/dataset/mbpp_all.jsonl_temp/test-00000-of-00001.jsonl',

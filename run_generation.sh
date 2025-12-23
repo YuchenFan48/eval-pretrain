@@ -8,22 +8,25 @@
 # 1. 配置区域
 # 在这里添加你想评测的模型路径列表
 MODELS=(
-    "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0188415-hf"
-    "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0196607-hf"
-    "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0180223-hf"
-    "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0172031-hf"
-    "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0163839-hf"
-    "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0155647-hf"
-    "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0147455-hf"
-    "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0139263-hf"
-    "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0122879-hf"
-    "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0114687-hf"
-    "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0106495-hf"
+    # "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0233471-hf"
+    # "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0212991-hf"
+    # "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0204799-hf"
+    # "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0188415-hf"
+    # "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0196607-hf"
+    # "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0180223-hf"
+    # "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0172031-hf"
+    # "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0163839-hf"
+    # "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0155647-hf"
+    # "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0147455-hf"
+    # "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0139263-hf"
+    # "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0122879-hf"
+    # "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0114687-hf"
+    # "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0106495-hf"
     "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0094207-hf"
-    "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_00786015-hf"
-    "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0077823-hf"
-    "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0069631-hf"
-    "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0057343-hf"
+    # "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_00786015-hf"
+    # "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0077823-hf"
+    # "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0069631-hf"
+    # "/mnt/cephfs/users/yuchenfan/qwen-kda-fixed-data-aug-checked/iter_0057343-hf"
 )
 
 TASK_TYPE="${1:-all}"
@@ -39,9 +42,9 @@ mkdir -p $OUTPUT_DIR $LOG_DIR
 TMUX_SESSION="eval_server"
 
 # 任务定义
-# REASONING_TASKS="math gsm8k gpqa mmlu-pro mmlu-redux mmlu"
-REASONING_TASKS="mmlu-redux"
-# CODE_TASKS="mbpp mbppplus humaneval"
+# REASONING_TASKS="math gsm8k gpqa mmlu-pro mmlu-redux mmlu arc-c arc-e hellaswag winogrande"
+REASONING_TASKS="mmlu mmlu-pro"
+CODE_TASKS="mbpp mbppplus humaneval"
 
 case $TASK_TYPE in
     all) BENCHMARKS="$REASONING_TASKS $CODE_TASKS" ;;

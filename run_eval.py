@@ -259,7 +259,6 @@ def run_benchmark_eval(
         except Exception as e:
             print(f"   ✗ 构建prompt失败: {e}")
             prompts.append("")
-    
     print(f"   ✓ 构建了 {len(prompts)} 个prompts")
 
     # 3. 批量推理（并发）
@@ -267,7 +266,7 @@ def run_benchmark_eval(
         print(f"3. 批量推理（使用 {args.max_workers} 个并发workers，每个prompt采样 {sample_k} 次）...")
     else:
         print(f"3. 批量推理（使用 {args.max_workers} 个并发workers）...")
-
+    print(prompts[0])
     predictions_samples = generate_predictions_k(prompts, inference, args)
     print(f"   ✓ 完成 {len(predictions_samples[0])} 个预测")
     
@@ -291,6 +290,20 @@ def run_benchmark_eval(
             references.append(item['answer'])
         elif benchmark_name == 'supergpqa':
             references.append(item['answer_letter'])
+        elif benchmark_name == 'hellaswag':
+            references.append(item.get('label', item.get('answer', '')))
+        elif benchmark_name == 'arc-c':
+            references.append(item.get('answerKey', item.get('answer', '')))
+        elif benchmark_name == 'arc-e':
+            references.append(item.get('answerKey', item.get('answer', '')))
+        elif benchmark_name == 'winogrande':
+            references.append(item.get('answer', item.get('label', item.get('answerKey', ''))))
+        elif benchmark_name == 'piqa':
+            references.append(item.get('answer', item.get('label', '')))
+        elif benchmark_name == 'nq':
+            references.append(item.get('answers', []))
+        elif benchmark_name == 'drop':
+            references.append(item.get('answers', []))
         else:
             references.append("")
     
@@ -607,6 +620,104 @@ def extract_prompt_and_answer(item: Dict[str, Any], dataset_name: str) -> tuple:
         # HumanEval数据集：通常有prompt字段和canonical_solution字段
         prompt = item.get('prompt', '')
         answer = item.get('canonical_solution', item.get('code', ''))
+
+    elif source == 'hellaswag' or 'HELLASWAG' in dataset_name.upper():
+        prompt = item.get('context', item.get('ctx', ''))
+        if not prompt:
+            prompt = f"{item.get('ctx_a', '')} {item.get('ctx_b', '')}".strip()
+        endings = item.get('endings', [])
+        label = item.get('label', item.get('answer', None))
+        answer = ''
+        if isinstance(label, int) and 0 <= label < len(endings):
+            answer = endings[label]
+        elif isinstance(label, str):
+            if label.isdigit():
+                idx = int(label)
+                if 0 <= idx < len(endings):
+                    answer = endings[idx]
+            elif label.upper() in ['A', 'B', 'C', 'D']:
+                idx = ord(label.upper()) - ord('A')
+                if 0 <= idx < len(endings):
+                    answer = endings[idx]
+        elif endings:
+            answer = endings[0]
+
+    elif source == 'arc-c' or 'ARC-C' in dataset_name.upper():
+        question = item.get('question', '')
+        if isinstance(question, dict):
+            prompt = question.get('stem', '')
+            choices = question.get('choices', item.get('choices', []))
+        else:
+            prompt = question
+            choices = item.get('choices', [])
+        answer_key = item.get('answerKey', item.get('answer', ''))
+        answer = ''
+        if choices and isinstance(choices[0], dict):
+            label_to_text = {str(c.get('label', '')).strip(): c.get('text', '') for c in choices}
+            answer = label_to_text.get(str(answer_key).strip(), '')
+        elif isinstance(choices, list):
+            if isinstance(answer_key, int):
+                idx = answer_key
+            elif str(answer_key).isdigit():
+                idx = int(str(answer_key))
+                if idx >= 1 and idx <= len(choices):
+                    idx -= 1
+            elif str(answer_key).strip().upper() in ['A', 'B', 'C', 'D', 'E']:
+                idx = ord(str(answer_key).strip().upper()) - ord('A')
+            else:
+                idx = None
+            if idx is not None and 0 <= idx < len(choices):
+                answer = choices[idx]
+
+    elif source == 'arc-e' or 'ARC-E' in dataset_name.upper():
+        question = item.get('question', '')
+        if isinstance(question, dict):
+            prompt = question.get('stem', '')
+            choices = question.get('choices', item.get('choices', []))
+        else:
+            prompt = question
+            choices = item.get('choices', [])
+        answer_key = item.get('answerKey', item.get('answer', ''))
+        answer = ''
+        if choices and isinstance(choices[0], dict):
+            label_to_text = {str(c.get('label', '')).strip(): c.get('text', '') for c in choices}
+            answer = label_to_text.get(str(answer_key).strip(), '')
+        elif isinstance(choices, list):
+            if isinstance(answer_key, int):
+                idx = answer_key
+            elif str(answer_key).isdigit():
+                idx = int(str(answer_key))
+                if idx >= 1 and idx <= len(choices):
+                    idx -= 1
+            elif str(answer_key).strip().upper() in ['A', 'B', 'C', 'D', 'E']:
+                idx = ord(str(answer_key).strip().upper()) - ord('A')
+            else:
+                idx = None
+            if idx is not None and 0 <= idx < len(choices):
+                answer = choices[idx]
+
+    elif source == 'winogrande' or 'WINOGRANDE' in dataset_name.upper():
+        prompt = item.get('sentence', item.get('text', ''))
+        option1 = item.get('option1', item.get('choice1', ''))
+        option2 = item.get('option2', item.get('choice2', ''))
+        answer_key = item.get('answer', item.get('label', ''))
+        answer = ''
+        answer_key_str = str(answer_key).strip().upper()
+        if answer_key_str in ['1', 'A']:
+            answer = option1
+        elif answer_key_str in ['2', 'B']:
+            answer = option2
+
+    elif source == 'piqa' or 'PIQA' in dataset_name.upper():
+        prompt = item.get('goal', item.get('question', ''))
+        sol1 = item.get('sol1', item.get('choice1', ''))
+        sol2 = item.get('sol2', item.get('choice2', ''))
+        answer_key = item.get('label', item.get('answer', ''))
+        answer = ''
+        if str(answer_key).strip() == '0':
+            answer = sol1
+        elif str(answer_key).strip() == '1':
+            answer = sol2
         
     else:
         # 默认情况：尝试从text字段中分离
