@@ -612,6 +612,30 @@ def build_drop_prompt(item: Dict[str, Any]) -> str:
     return prompt
 
 
+def build_simpleqa_prompt(item: Dict[str, Any]) -> str:
+    """
+    构建SimpleQA的prompt
+    """
+    examples = [
+        {
+            'question': "Who wrote the novel 1984?",
+            'answer': "George Orwell",
+        },
+        {
+            'question': "What is the capital of Australia?",
+            'answer': "Canberra",
+        },
+    ]
+    
+    question = item.get('question', '').strip()
+    prompt = ""
+    for ex in examples:
+        prompt += f"Question: {ex['question']}\n"
+        prompt += f"Answer: The answer is {ex['answer']}\n\n"
+    prompt += f"Question: {question}\nAnswer:"
+    return prompt
+
+
 def build_supergpqa_prompt(item: Dict[str, Any]) -> str:
     """
     构建SuperGPQA的prompt（few-shot）
@@ -954,6 +978,7 @@ PROMPT_BUILDERS = {
     'piqa': build_piqa_prompt,
     'nq': build_nq_prompt,
     'drop': build_drop_prompt,
+    'simpleqa': build_simpleqa_prompt,
     'supergpqa': build_supergpqa_prompt,
     # 代码生成 benchmarks
     'mbpp': build_mbpp_prompt,

@@ -304,6 +304,8 @@ def run_benchmark_eval(
             references.append(item.get('answers', []))
         elif benchmark_name == 'drop':
             references.append(item.get('answers', []))
+        elif benchmark_name == 'simpleqa':
+            references.append(item.get('answer', ''))
         else:
             references.append("")
     

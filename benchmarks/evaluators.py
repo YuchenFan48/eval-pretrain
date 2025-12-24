@@ -652,6 +652,13 @@ def evaluate_benchmark(
             ref_norm_list = [normalize_nq_answer(ans) for ans in gold_answers]
             is_correct = pred_norm in ref_norm_list
 
+        elif benchmark_name == 'simpleqa':
+            extracted_pred = extract_answer_text(pred)
+            ref_answer = str(ref)
+            pred_norm = normalize_nq_answer(extracted_pred)
+            ref_norm = normalize_nq_answer(ref_answer)
+            is_correct = (pred_norm == ref_norm)
+
         elif benchmark_name == 'drop':
             extracted_pred = extract_answer_drop(pred)
             if isinstance(ref, list):

@@ -87,6 +87,12 @@ BENCHMARK_CONFIG = {
         'fields': {'question': 'question', 'context': 'context', 'answers': 'answers'},
         'type': 'reading',
     },
+    'simpleqa': {
+        'path': '/mnt/cephfs/users/yuchenfan/benchmark-eval/dataset/simple_qa_test_set.csv',
+        'format': 'csv',
+        'fields': {'question': 'question', 'answer': 'answer'},
+        'type': 'reading',
+    },
     'drop': {
         'path': '/mnt/cephfs/users/yuchenfan/benchmark-eval/dataset/drop.parquet',
         'format': 'parquet',

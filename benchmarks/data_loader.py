@@ -107,6 +107,8 @@ def parse_csv_data(benchmark_name: str, raw_data: List[List[str]]) -> List[Dict[
         return parse_gpqa_csv(raw_data)
     elif benchmark_name == 'mmlu-redux':
         return parse_mmlu_redux_csv(raw_data)
+    elif benchmark_name == 'simpleqa':
+        return parse_simpleqa_csv(raw_data)
     else:
         raise ValueError(f"Unknown benchmark: {benchmark_name}")
 
@@ -216,6 +218,26 @@ def parse_mmlu_redux_csv(raw_data: List[List[str]]) -> List[Dict[str, Any]]:
         }
         data.append(item)
     
+    return data
+
+
+def parse_simpleqa_csv(raw_data: List[List[str]]) -> List[Dict[str, Any]]:
+    """
+    解析SimpleQA的CSV数据
+    CSV格式：metadata, problem, answer
+    """
+    data = []
+    for i, row in enumerate(raw_data):
+        if i == 0:  # 跳过表头
+            continue
+        if len(row) < 3:
+            continue
+        item = {
+            'metadata': row[0],
+            'question': row[1],
+            'answer': row[2],
+        }
+        data.append(item)
     return data
 
 
